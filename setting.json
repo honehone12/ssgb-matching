@@ -1,0 +1,12 @@
+{
+	"ServiceName": "Matching",
+	"ServiceVersion": "0.0.1",
+	"ServiceListenAt": "127.0.0.1:9990",
+    
+	"LogLevel": 1,
+
+	"Classes": 6,
+
+	"QInitialCapacity": 100,
+	"RollingInterval": 10
+}
