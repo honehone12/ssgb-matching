@@ -40,10 +40,13 @@ func TicketNew(c echo.Context) error {
 		return errres.InternalError(err, c.Logger())
 	}
 
-	ctx.ConnMap().Set(t.Id(), conns.MakeConn(ctx.Engine().ConnParams(), ch, c.Logger()))
+	id := t.Id()
+	conn := conns.MakeConn(ctx.Engine().ConnParams(), ch, c.Logger())
+	ctx.ConnMap().Set(id, conn)
+	conn.StartWaiting(id)
 
 	return c.JSON(http.StatusOK, TicketNewResponse{
-		Id: t.Id(),
+		Id: id,
 	})
 }
 
@@ -75,7 +78,6 @@ func TicketListen(c echo.Context) error {
 		return errres.BadRequest(err, c.Logger())
 	}
 
-	// !!
 	if conn.Established() {
 		return errres.BadRequest(errs.ErrorDuplicatedConnection(), c.Logger())
 	}

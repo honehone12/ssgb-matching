@@ -37,6 +37,11 @@ func (c *Conn) Established() bool {
 	return c.inner != nil
 }
 
+func (c *Conn) StartWaiting(id string) {
+	go c.wait()
+	go c.sendMessagedWhileWait(id)
+}
+
 func (c *Conn) SetWs(conn *websocket.Conn) {
 	c.inner = conn
 }
@@ -48,24 +53,30 @@ func (c *Conn) wait() {
 func (c *Conn) recover(id string) {
 	if r := recover(); r != nil {
 		c.logger.Warn("recovering sending")
-		go c.sendWhileWait(id)
+		go c.sendMessagedWhileWait(id)
 	}
 }
 
-func (c *Conn) sendWhileWait(id string) {
-	if !c.Established() {
-		return
-	}
-
+func (c *Conn) sendMessagedWhileWait(id string) {
 	defer c.recover(id)
 
+WAIT:
 	for {
-		var msg messages.StatusMessage
+		msg := messages.StatusMessage{}
 		select {
 		case gsip := <-c.closeCh:
-			msg = messages.MakeMatchedMessage(gsip)
+			if !c.Established() {
+				break WAIT
+			}
+
+			msg.Status = messages.StatusMatched
+			msg.Gsip = gsip
 		case <-c.ticker.C:
-			msg = messages.MakeWaitingMessage()
+			if !c.Established() {
+				continue
+			}
+
+			msg.Status = messages.StatusWaitng
 		}
 
 		timeout := time.Now().Add(time.Duration(c.params.WsTimeoutSec))
@@ -75,6 +86,7 @@ func (c *Conn) sendWhileWait(id string) {
 
 		if err := c.inner.WriteJSON(msg); err != nil {
 			c.logger.Warnf("conn[%s] time out: %s", id, err)
+			c.SetWs(nil)
 		}
 
 		if msg.Status == messages.StatusMatched {
