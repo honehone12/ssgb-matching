@@ -1,18 +1,24 @@
 package ticket
 
-import libuuid "github.com/google/uuid"
+import (
+	"ssgb-matching/gsip"
+
+	libuuid "github.com/google/uuid"
+)
 
 type Ticket struct {
-	id string
-
-	class int64
+	id     string
+	class  int64
+	gsipCh chan<- gsip.GSIP
 }
 
-func MakeTicket(class int64) Ticket {
+func MakeTicket(class int64) (Ticket, <-chan gsip.GSIP) {
+	ch := make(chan gsip.GSIP)
 	return Ticket{
-		id:    libuuid.NewString(),
-		class: class,
-	}
+		id:     libuuid.NewString(),
+		class:  class,
+		gsipCh: ch,
+	}, ch
 }
 
 func (t *Ticket) Id() string {

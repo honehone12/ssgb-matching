@@ -1,4 +1,4 @@
-package q
+package queue
 
 import (
 	"ssgb-matching/errs"

@@ -28,6 +28,7 @@ func NewServer(
 	c *context.Components,
 ) *Server {
 	e.Validator = validator.NewValidator()
+	e.Logger.SetLevel(params.LogLevel)
 	return &Server{
 		params:     params,
 		echo:       e,
@@ -52,10 +53,9 @@ func (s *Server) Run() <-chan error {
 	s.echo.Use(middleware.Recover())
 	s.echo.Use(middleware.Logger())
 
-	s.echo.Logger.SetLevel(s.params.LogLevel)
-
 	s.echo.GET("/", handler.Root)
 	s.echo.POST("/ticket/new", handler.TicketNew)
+	s.echo.GET("/ticket/listen/;id", handler.TicketListen)
 
 	go s.start()
 	return s.errCh

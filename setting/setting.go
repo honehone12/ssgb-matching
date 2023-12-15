@@ -13,10 +13,16 @@ type Setting struct {
 
 	LogLevel int
 
-	Classes int
-
 	QInitialCapacity   int
 	RollingIntervalMil int
+
+	Classes             int
+	MatchingStrategy    int
+	MinMatchingCapacity int
+	MaxMatchingCapacity int
+
+	ConnReportIntervalSec int
+	WsTimeoutSec          int
 }
 
 func LoadSetting(fileName string) (Setting, error) {

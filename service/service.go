@@ -2,12 +2,13 @@ package service
 
 import (
 	"ssgb-matching/arg"
+	"ssgb-matching/conns"
 	"ssgb-matching/matching/engine"
-	"ssgb-matching/matching/q"
+	"ssgb-matching/matching/matching"
+	"ssgb-matching/matching/queue"
 	"ssgb-matching/server"
 	"ssgb-matching/server/context"
 	"ssgb-matching/setting"
-	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
@@ -17,8 +18,27 @@ import (
 func Run() {
 	e := echo.New()
 
-	arg := arg.ParseArgs()
-	setting, err := setting.LoadSetting(arg.SettingFile)
+	args := arg.ParseArgs()
+	setting, err := setting.LoadSetting(args.SettingFile)
+	if err != nil {
+		e.Logger.Fatal(err)
+	}
+
+	engine, err := engine.NewEngine(engine.EngineParams{
+		Classes:            int64(setting.Classes),
+		Strategy:           setting.MatchingStrategy,
+		RollingIntervalMil: int64(setting.RollingIntervalMil),
+		MatchingParams: matching.MatchingParams{
+			MinMatchingCapacity: int64(setting.MinMatchingCapacity),
+			MaxMatchingCapacity: int64(setting.MaxMatchingCapacity),
+		},
+		QParams: queue.QParams{
+			InitialCapacity: int64(setting.QInitialCapacity),
+		},
+		ConnParams: conns.ConnParams{
+			ReportIntervalSec: int64(setting.ConnReportIntervalSec),
+		},
+	}, e.Logger)
 	if err != nil {
 		e.Logger.Fatal(err)
 	}
@@ -26,13 +46,8 @@ func Run() {
 	c := context.NewComponents(
 		context.NewMetadata(setting.ServiceName, setting.ServiceVersion),
 		&websocket.Upgrader{},
-		engine.NewEngine(engine.EngineParams{
-			Classes:            setting.Classes,
-			RollingIntervalMil: time.Duration(setting.RollingIntervalMil),
-			QParams: q.QParams{
-				InitialCapacity: int64(setting.QInitialCapacity),
-			},
-		}, e.Logger),
+		engine,
+		conns.NewConnMap(),
 	)
 	s := server.NewServer(
 		server.ServerParams{
@@ -41,5 +56,6 @@ func Run() {
 		}, e, c,
 	)
 
+	engine.StartRolling()
 	e.Logger.Fatal(<-s.Run())
 }

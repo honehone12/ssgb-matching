@@ -5,8 +5,14 @@
     
 	"LogLevel": 1,
 
-	"Classes": 6,
-
 	"QInitialCapacity": 100,
-	"RollingInterval": 10
+	"RollingIntervalMil": 100,
+
+	"Classes": 6,
+	"MatchingStrategy": 1,
+	"MinMatchingCapacity": 4,
+	"MaxMatchingCapacity": 6,
+
+	"ConnReportIntervalSec": 1,
+	"WsTimeoutSec": 5
 }

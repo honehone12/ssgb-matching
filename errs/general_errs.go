@@ -11,6 +11,9 @@ func ErrorCastFail(name string) error {
 }
 
 func IsErrorCastFail(err error) bool {
+	if err == nil {
+		return false
+	}
 	return strings.HasPrefix(err.Error(), "failed to cast")
 }
 
@@ -19,5 +22,16 @@ func ErrorIndexOutOfRange() error {
 }
 
 func IsErrorIndexOutOfRange(err error) bool {
+	if err == nil {
+		return false
+	}
 	return err.Error() == "index out of range"
+}
+
+func ErrorNotimplemented() error {
+	return errors.New("not implemented")
+}
+
+func ErrorNoSuchItem() error {
+	return errors.New("no such item")
 }
