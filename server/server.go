@@ -55,7 +55,7 @@ func (s *Server) Run() <-chan error {
 
 	s.echo.GET("/", handler.Root)
 	s.echo.POST("/ticket/new", handler.TicketNew)
-	s.echo.GET("/ticket/listen/;id", handler.TicketListen)
+	s.echo.GET("/ticket/listen/:id", handler.TicketListen)
 
 	go s.start()
 	return s.errCh

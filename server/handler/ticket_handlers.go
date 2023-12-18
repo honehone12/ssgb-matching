@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"ssgb-matching/conns"
 	"ssgb-matching/errs"
-	"ssgb-matching/matching/ticket"
+	"ssgb-matching/matching/tickets"
 	"ssgb-matching/server/context"
 	"ssgb-matching/server/errres"
 	"ssgb-matching/server/form"
@@ -32,8 +32,8 @@ func TicketNew(c echo.Context) error {
 		return errres.BadRequest(err, c.Logger())
 	}
 
-	t, ch := ticket.MakeTicket(formData.Class)
-	err = ctx.Engine().Enqueue(t)
+	t, ch := tickets.MakeTicket(formData.Class)
+	err = ctx.Engine().AddToPool(t)
 	if errs.IsErrorIndexOutOfRange(err) {
 		return errres.BadRequest(err, c.Logger())
 	} else if err != nil {
@@ -43,7 +43,6 @@ func TicketNew(c echo.Context) error {
 	id := t.Id()
 	conn := conns.MakeConn(ctx.Engine().ConnParams(), ch, c.Logger())
 	ctx.ConnMap().Set(id, conn)
-	conn.StartWaiting(id)
 
 	return c.JSON(http.StatusOK, TicketNewResponse{
 		Id: id,
@@ -87,8 +86,16 @@ func TicketListen(c echo.Context) error {
 		return errres.InternalError(err, c.Logger())
 	}
 
+	err = ctx.Engine().PoolToQueue(p.Id)
+	if err != nil {
+		return errres.BadRequest(err, c.Logger())
+	}
+
 	conn.SetWs(ws)
 	connMap.Set(p.Id, conn)
+	conn.StartWaiting(p.Id, func() {
+		connMap.Remove(p.Id)
+	})
 
-	return errs.ErrorNotimplemented()
+	return nil
 }

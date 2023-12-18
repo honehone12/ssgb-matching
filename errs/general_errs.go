@@ -35,3 +35,7 @@ func ErrorNotimplemented() error {
 func ErrorNoSuchItem() error {
 	return errors.New("no such item")
 }
+
+func ErrorItemAlreadyExists() error {
+	return errors.New("item already exists")
+}

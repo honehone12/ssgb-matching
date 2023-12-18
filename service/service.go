@@ -37,6 +37,7 @@ func Run() {
 		},
 		ConnParams: conns.ConnParams{
 			ReportIntervalSec: int64(setting.ConnReportIntervalSec),
+			WsTimeoutSec:      int64(setting.WsTimeoutSec),
 		},
 	}, e.Logger)
 	if err != nil {

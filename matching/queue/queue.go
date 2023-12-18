@@ -2,7 +2,7 @@ package queue
 
 import (
 	"ssgb-matching/errs"
-	"ssgb-matching/matching/ticket"
+	"ssgb-matching/matching/tickets"
 
 	libqueue "github.com/Workiva/go-datastructures/queue"
 )
@@ -27,33 +27,33 @@ func (q *Q) Len() int64 {
 	return q.inner.Len()
 }
 
-func (q *Q) Enqueue(ticket ticket.Ticket) error {
+func (q *Q) Enqueue(ticket tickets.Ticket) error {
 	return q.inner.Put(ticket)
 }
 
-func (q *Q) DequeueN(n int64) ([]ticket.Ticket, error) {
+func (q *Q) DequeueN(n int64) ([]tickets.Ticket, error) {
 	interfaces, err := q.inner.Get(n)
 	if err != nil {
 		return nil, err
 	}
 
 	len := len(interfaces)
-	tickets := make([]ticket.Ticket, 0, len)
+	ts := make([]tickets.Ticket, 0, len)
 	for i := 0; i < len; i++ {
-		t, ok := interfaces[i].(ticket.Ticket)
+		t, ok := interfaces[i].(tickets.Ticket)
 		if !ok {
 			return nil, errs.ErrorCastFail("ticket")
 		}
-		tickets = append(tickets, t)
+		ts = append(ts, t)
 	}
 
-	return tickets, nil
+	return ts, nil
 }
 
-func (q *Q) Dequeue() (ticket.Ticket, error) {
+func (q *Q) Dequeue() (tickets.Ticket, error) {
 	t, err := q.DequeueN(1)
 	if err != nil {
-		return ticket.Ticket{}, err
+		return tickets.Ticket{}, err
 	}
 
 	return t[0], nil

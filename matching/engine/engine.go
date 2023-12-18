@@ -3,13 +3,14 @@ package engine
 import (
 	"ssgb-matching/conns"
 	"ssgb-matching/errs"
+	"ssgb-matching/gsip"
 	"ssgb-matching/logger"
 	"time"
 
 	"ssgb-matching/matching/matching"
 	"ssgb-matching/matching/queue"
 	"ssgb-matching/matching/strategy"
-	"ssgb-matching/matching/ticket"
+	"ssgb-matching/matching/tickets"
 )
 
 type EngineParams struct {
@@ -22,11 +23,12 @@ type EngineParams struct {
 }
 
 type Engine struct {
-	params EngineParams
-	qMap   map[int64]*queue.Q
-	onRoll matching.RollerFunc
-	logger logger.Logger
-	ticker *time.Ticker
+	params     EngineParams
+	qMap       map[int64]*queue.Q
+	ticketPool *TicketPool
+	onRoll     matching.RollerFunc
+	logger     logger.Logger
+	ticker     *time.Ticker
 }
 
 func NewEngine(params EngineParams, logger logger.Logger) (*Engine, error) {
@@ -40,11 +42,12 @@ func NewEngine(params EngineParams, logger logger.Logger) (*Engine, error) {
 	}
 
 	e := &Engine{
-		params: params,
-		qMap:   make(map[int64]*queue.Q, params.Classes),
-		onRoll: f,
-		logger: logger,
-		ticker: time.NewTicker(time.Millisecond * time.Duration(params.RollingIntervalMil)),
+		params:     params,
+		qMap:       make(map[int64]*queue.Q, params.Classes),
+		ticketPool: NewTicketPool(),
+		onRoll:     f,
+		logger:     logger,
+		ticker:     time.NewTicker(time.Millisecond * time.Duration(params.RollingIntervalMil)),
 	}
 
 	for i := int64(1); i <= params.Classes; i++ {
@@ -65,29 +68,30 @@ func (e *Engine) ValidClassIndex(idx int64) error {
 	return nil
 }
 
-func (e *Engine) Enqueue(ticket ticket.Ticket) error {
-	idx := ticket.Class()
-	if err := e.ValidClassIndex(idx); err != nil {
+func (e *Engine) AddToPool(ticket tickets.Ticket) error {
+	if err := e.ValidClassIndex(ticket.Class()); err != nil {
+		return err
+	}
+	return e.ticketPool.Put(ticket)
+}
+
+func (e *Engine) PoolToQueue(id string) error {
+	t, err := e.ticketPool.Pull(id)
+	if err != nil {
 		return err
 	}
 
-	if err := e.qMap[idx].Enqueue(ticket); err != nil {
+	idx := t.Class()
+	if err := e.qMap[idx].Enqueue(t); err != nil {
 		return err
 	}
 
 	e.logger.Debugf("enqueue a ticket to class[%d]", idx)
-
 	return nil
 }
 
 func (e *Engine) StartRolling() {
-	e.logger.Debugf(
-		`engine starts rolling with params: classes->%d, strategy->%d, interval-mil->%d, q-capacity->%d`,
-		e.params.Classes,
-		e.params.Strategy,
-		e.params.RollingIntervalMil,
-		e.params.QParams.InitialCapacity,
-	)
+	e.logger.Infof("engine starts rolling with params: %#v", e.params)
 	go e.roll()
 }
 
@@ -102,9 +106,30 @@ func (e *Engine) roll() {
 	defer e.recover()
 
 	for range e.ticker.C {
-		_, err := e.onRoll(e.params.MatchingParams, e.qMap)
+		results, err := e.onRoll(e.params.MatchingParams, e.qMap)
 		if err != nil {
 			e.logger.Panic(err)
+		}
+
+		lenResult := len(results)
+		if lenResult == 0 {
+			continue
+		}
+
+		e.logger.Debugf("%d matching done", lenResult)
+		for class, q := range e.qMap {
+			e.logger.Debugf("queue[%d] length: %d", class, q.Len())
+		}
+
+		for i := 0; i < lenResult; i++ {
+			r := results[i]
+			lenTickets := len(r.Matched)
+			for j := 0; j < lenTickets; j++ {
+				r.Matched[j].Chan() <- gsip.GSIP{
+					Address: "dummy",
+					Port:    7777,
+				}
+			}
 		}
 	}
 }

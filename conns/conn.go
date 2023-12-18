@@ -15,21 +15,19 @@ type ConnParams struct {
 }
 
 type Conn struct {
-	params  ConnParams
-	inner   *websocket.Conn
-	ticker  *time.Ticker
-	waitCh  <-chan gsip.GSIP
-	closeCh chan gsip.GSIP
-	logger  logger.Logger
+	params ConnParams
+	inner  *websocket.Conn
+	ticker *time.Ticker
+	waitCh <-chan gsip.GSIP
+	logger logger.Logger
 }
 
 func MakeConn(params ConnParams, waitCh <-chan gsip.GSIP, logger logger.Logger) Conn {
 	return Conn{
-		params:  params,
-		ticker:  time.NewTicker(time.Second * time.Duration(params.ReportIntervalSec)),
-		waitCh:  waitCh,
-		closeCh: make(chan gsip.GSIP),
-		logger:  logger,
+		params: params,
+		ticker: time.NewTicker(time.Second * time.Duration(params.ReportIntervalSec)),
+		waitCh: waitCh,
+		logger: logger,
 	}
 }
 
@@ -37,34 +35,29 @@ func (c *Conn) Established() bool {
 	return c.inner != nil
 }
 
-func (c *Conn) StartWaiting(id string) {
-	go c.wait()
-	go c.sendMessagedWhileWait(id)
-}
-
 func (c *Conn) SetWs(conn *websocket.Conn) {
 	c.inner = conn
 }
 
-func (c *Conn) wait() {
-	c.closeCh <- <-c.waitCh
+func (c *Conn) StartWaiting(id string, onDone func()) {
+	go c.sendMessagedWhileWait(id, onDone)
 }
 
-func (c *Conn) recover(id string) {
+func (c *Conn) recover(id string, onDone func()) {
 	if r := recover(); r != nil {
 		c.logger.Warn("recovering sending")
-		go c.sendMessagedWhileWait(id)
+		go c.sendMessagedWhileWait(id, onDone)
 	}
 }
 
-func (c *Conn) sendMessagedWhileWait(id string) {
-	defer c.recover(id)
+func (c *Conn) sendMessagedWhileWait(id string, onDone func()) {
+	defer c.recover(id, onDone)
 
 WAIT:
 	for {
 		msg := messages.StatusMessage{}
 		select {
-		case gsip := <-c.closeCh:
+		case gsip := <-c.waitCh:
 			if !c.Established() {
 				break WAIT
 			}
@@ -79,7 +72,7 @@ WAIT:
 			msg.Status = messages.StatusWaitng
 		}
 
-		timeout := time.Now().Add(time.Duration(c.params.WsTimeoutSec))
+		timeout := time.Now().Add(time.Second * time.Duration(c.params.WsTimeoutSec))
 		if err := c.inner.SetWriteDeadline(timeout); err != nil {
 			c.logger.Panic(err)
 		}

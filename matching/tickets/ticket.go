@@ -1,4 +1,4 @@
-package ticket
+package tickets
 
 import (
 	"ssgb-matching/gsip"
@@ -27,4 +27,8 @@ func (t *Ticket) Id() string {
 
 func (t *Ticket) Class() int64 {
 	return t.class
+}
+
+func (t *Ticket) Chan() chan<- gsip.GSIP {
+	return t.gsipCh
 }

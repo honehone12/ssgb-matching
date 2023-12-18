@@ -24,11 +24,12 @@ func (m *ConnMap) Set(id string, conn Conn) {
 	_, exists := m.inner.LoadOrStore(id, conn)
 	if !exists {
 		m.count++
-	} else {
-		_, exists = m.inner.Swap(id, conn)
-		if !exists {
-			panic("item should exists here")
-		}
+		return
+	}
+
+	_, exists = m.inner.Swap(id, conn)
+	if !exists {
+		panic("item should exists here")
 	}
 }
 
@@ -40,14 +41,13 @@ func (m *ConnMap) Remove(id string) {
 
 func (m *ConnMap) Get(id string) (Conn, error) {
 	i, ok := m.inner.Load(id)
-	if ok {
-		c, ok := i.(Conn)
-		if ok {
-			return c, nil
-		} else {
-			return Conn{}, errs.ErrorCastFail("conn")
-		}
-	} else {
+	if !ok {
 		return Conn{}, errs.ErrorNoSuchItem()
 	}
+
+	c, ok := i.(Conn)
+	if !ok {
+		return Conn{}, errs.ErrorCastFail("conn")
+	}
+	return c, nil
 }

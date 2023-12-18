@@ -2,7 +2,7 @@ package matching
 
 import (
 	"ssgb-matching/matching/queue"
-	"ssgb-matching/matching/ticket"
+	"ssgb-matching/matching/tickets"
 )
 
 type RollerFunc func(MatchingParams, map[int64]*queue.Q,
@@ -14,5 +14,5 @@ type MatchingParams struct {
 }
 
 type MatchingResult struct {
-	Matched []ticket.Ticket
+	Matched []tickets.Ticket
 }
