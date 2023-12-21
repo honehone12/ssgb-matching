@@ -41,6 +41,10 @@ func Run() {
 				ReportIntervalSec: int64(setting.ConnReportIntervalSec),
 				WsTimeoutSec:      int64(setting.WsTimeoutSec),
 			},
+			PoolParams: engine.TicketPoolParams{
+				CleanUpIntervalSec: int64(setting.PoolCleanUpIntervalSec),
+				WsUpgradeLimitSec:  int64(setting.WsUpgradeLimitSec),
+			},
 		},
 		gsip.NewDummyProvider(),
 		e.Logger,

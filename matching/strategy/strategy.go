@@ -17,6 +17,6 @@ func StrategyFunc(strategy int) (matching.RollerFunc, error) {
 	case StrategyClassRole:
 		return RollerClassRole, nil
 	default:
-		return nil, errors.New("no RollerFunc is defined to the strategy")
+		return nil, errors.New("no roller func is defined to the strategy")
 	}
 }

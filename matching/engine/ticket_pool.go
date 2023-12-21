@@ -2,20 +2,89 @@ package engine
 
 import (
 	"ssgb-matching/errs"
+	"ssgb-matching/logger"
 	"ssgb-matching/matching/tickets"
 	"sync"
+	"time"
 )
 
-type TicketPool struct {
-	count int64
-	inner sync.Map
+type TicketPoolParams struct {
+	CleanUpIntervalSec int64
+	WsUpgradeLimitSec  int64
 }
 
-func NewTicketPool() *TicketPool {
+type poolItem struct {
+	ticket     tickets.Ticket
+	timePooled time.Time
+}
+
+type TicketPool struct {
+	params  TicketPoolParams
+	count   int64
+	inner   sync.Map
+	ticker  time.Ticker
+	closeCh chan bool
+	logger  logger.Logger
+}
+
+func NewTicketPool(params TicketPoolParams, logger logger.Logger) *TicketPool {
 	return &TicketPool{
-		count: 0,
-		inner: sync.Map{},
+		params:  params,
+		count:   0,
+		inner:   sync.Map{},
+		ticker:  *time.NewTicker(time.Second),
+		closeCh: make(chan bool),
+		logger:  logger,
 	}
+}
+
+func (p *TicketPool) recover() {
+	if r := recover(); r != nil {
+		p.logger.Warn("recovering clean up")
+		go p.CleanUp()
+	}
+}
+
+func (p *TicketPool) CleanUp() {
+	defer p.recover()
+
+LOOP:
+	for {
+		select {
+		case <-p.closeCh:
+			p.ticker.Stop()
+			break LOOP
+		case <-p.ticker.C:
+			tmp := make([]string, 0)
+			limit := time.Now().Add(-time.Second * time.Duration(p.params.WsUpgradeLimitSec))
+			p.inner.Range(func(k, v interface{}) bool {
+				item, ok := v.(poolItem)
+				if !ok {
+					p.logger.Panic(errs.ErrorCastFail("poolitem"))
+				}
+
+				if item.timePooled.Before(limit) {
+					id, ok := k.(string)
+					if !ok {
+						p.logger.Panic(errs.ErrorCastFail("string"))
+					}
+
+					tmp = append(tmp, id)
+				}
+				return true
+			})
+
+			for i, count := 0, len(tmp); i < count; i++ {
+				id := tmp[i]
+				p.inner.Delete(id)
+				p.logger.Warnf("removed from pool [%s]", id)
+			}
+		}
+	}
+}
+
+func (p *TicketPool) CloseCh() chan<- bool {
+	return p.closeCh
 }
 
 func (p *TicketPool) Len() int64 {
@@ -23,7 +92,10 @@ func (p *TicketPool) Len() int64 {
 }
 
 func (p *TicketPool) Put(t tickets.Ticket) error {
-	_, exists := p.inner.LoadOrStore(t.Id(), t)
+	_, exists := p.inner.LoadOrStore(t.Id(), poolItem{
+		ticket:     t,
+		timePooled: time.Now(),
+	})
 	if exists {
 		return errs.ErrorItemAlreadyExists()
 	}
@@ -39,10 +111,10 @@ func (p *TicketPool) Pull(id string) (tickets.Ticket, error) {
 	}
 
 	p.count--
-	t, ok := i.(tickets.Ticket)
+	item, ok := i.(poolItem)
 	if !ok {
 		return tickets.Ticket{}, errs.ErrorCastFail("ticket")
 	}
 
-	return t, nil
+	return item.ticket, nil
 }

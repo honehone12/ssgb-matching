@@ -21,8 +21,10 @@ type Setting struct {
 	MinMatchingCapacity int
 	MaxMatchingCapacity int
 
-	ConnReportIntervalSec int
-	WsTimeoutSec          int
+	WsTimeoutSec           int
+	ConnReportIntervalSec  int
+	WsUpgradeLimitSec      int
+	PoolCleanUpIntervalSec int
 }
 
 func LoadSetting(fileName string) (Setting, error) {

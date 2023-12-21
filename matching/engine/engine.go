@@ -20,6 +20,7 @@ type EngineParams struct {
 	MatchingParams     matching.MatchingParams
 	QParams            queue.QParams
 	ConnParams         conns.ConnParams
+	PoolParams         TicketPoolParams
 }
 
 type Engine struct {
@@ -46,7 +47,7 @@ func NewEngine(params EngineParams, provider gsip.Provider, logger logger.Logger
 	e := &Engine{
 		params:     params,
 		qMap:       make(map[int64]*queue.Q, params.Classes),
-		ticketPool: NewTicketPool(),
+		ticketPool: NewTicketPool(params.PoolParams, logger),
 		onRoll:     f,
 		provider:   provider,
 		logger:     logger,
@@ -104,6 +105,7 @@ func (e *Engine) FindBackfill(class int64) (gsip.GSIP, error) {
 func (e *Engine) StartRolling() {
 	e.logger.Infof("engine starts rolling with params: %#v", e.params)
 	go e.roll()
+	go e.ticketPool.CleanUp()
 }
 
 func (e *Engine) recover() {

@@ -3,7 +3,7 @@
 	"ServiceVersion": "0.0.1",
 	"ServiceListenAt": "127.0.0.1:9990",
     
-	"LogLevel": 1,
+	"LogLevel": 2,
 
 	"QInitialCapacity": 100,
 	"RollingIntervalMil": 100,
@@ -13,6 +13,8 @@
 	"MinMatchingCapacity": 4,
 	"MaxMatchingCapacity": 6,
 
+	"WsTimeoutSec": 5,
 	"ConnReportIntervalSec": 1,
-	"WsTimeoutSec": 5
+	"WsUpgradeLimitSec": 5,
+	"PoolCleanUpIntervalSec": 1
 }
