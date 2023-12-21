@@ -5,6 +5,10 @@ import (
 	"ssgb-matching/matching/tickets"
 )
 
+const (
+	MatchingClassAny = 0
+)
+
 type RollerFunc func(MatchingParams, map[int64]*queue.Q,
 ) ([]MatchingResult, error)
 
@@ -14,5 +18,6 @@ type MatchingParams struct {
 }
 
 type MatchingResult struct {
+	Class   int64
 	Matched []tickets.Ticket
 }

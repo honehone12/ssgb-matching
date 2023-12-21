@@ -9,11 +9,11 @@ import (
 type Ticket struct {
 	id     string
 	class  int64
-	gsipCh chan<- gsip.GSIP
+	gsipCh chan<- gsip.GSIPResult
 }
 
-func MakeTicket(class int64) (Ticket, <-chan gsip.GSIP) {
-	ch := make(chan gsip.GSIP)
+func MakeTicket(class int64) (Ticket, <-chan gsip.GSIPResult) {
+	ch := make(chan gsip.GSIPResult)
 	return Ticket{
 		id:     libuuid.NewString(),
 		class:  class,
@@ -29,6 +29,6 @@ func (t *Ticket) Class() int64 {
 	return t.class
 }
 
-func (t *Ticket) Chan() chan<- gsip.GSIP {
+func (t *Ticket) Chan() chan<- gsip.GSIPResult {
 	return t.gsipCh
 }

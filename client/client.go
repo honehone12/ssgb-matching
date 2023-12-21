@@ -6,20 +6,28 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"net/url"
+	"ssgb-matching/gsip"
 	"ssgb-matching/messages"
+	"strconv"
 	"sync"
 
 	"github.com/gorilla/websocket"
 )
 
 type Client struct {
+	Bad       bool
+	Backfill  bool
 	ServerUrl string
 }
 
 type ClientTicket struct {
 	Id string
+
+	FoundBackfill bool
+	BackfillGsip  gsip.GSIP
 }
 
 type ClientConnection struct {
@@ -29,17 +37,32 @@ type ClientConnection struct {
 func parseFlags() (Client, int) {
 	serverUrl := flag.String("s", "127.0.0.1:9990", "server url")
 	n := flag.Int("n", 1, "num requests")
+	backfill := flag.Bool("b", false, "use backfill")
+	bad := flag.Bool("bad", false, "run bad client")
 
 	flag.Parse()
+
+	if *bad {
+		return Client{
+			ServerUrl: *serverUrl,
+			Backfill:  *backfill,
+			Bad:       true,
+		}, 1
+	}
+
 	return Client{
 		ServerUrl: *serverUrl,
+		Backfill:  *backfill,
+		Bad:       false,
 	}, *n
 }
 
-func (c *Client) getTicket() (ClientTicket, error) {
+func (c *Client) getTicket(class int64) (ClientTicket, error) {
 	t := ClientTicket{}
+
 	form := url.Values{
-		"class": {"1"},
+		"class":    {strconv.FormatInt(class, 10)},
+		"backfill": {strconv.FormatBool(c.Backfill)},
 	}
 	serverUrl := "http://" + c.ServerUrl + "/ticket/new"
 	res, err := http.PostForm(serverUrl, form)
@@ -53,7 +76,12 @@ func (c *Client) getTicket() (ClientTicket, error) {
 		return t, err
 	}
 
+	if res.StatusCode != http.StatusOK {
+		return t, errors.New(string(b))
+	}
+
 	err = json.Unmarshal(b, &t)
+	fmt.Printf("%#v\n", t)
 	return t, err
 }
 
@@ -72,8 +100,18 @@ func (c *Client) startListenTicket(ticket ClientTicket) (ClientConnection, error
 	return cc, nil
 }
 
-func (c *ClientConnection) listenTicket() {
+func (c *ClientConnection) listenTicket(bad bool) {
+	defer c.Conn.Close()
+
 	for {
+		if bad {
+			n := rand.Intn(10)
+			if n == 7 {
+				fmt.Println("error 7, quitting")
+				break
+			}
+		}
+
 		msg := messages.StatusMessage{}
 		if err := c.Conn.ReadJSON(&msg); err != nil {
 			panic(err)
@@ -88,23 +126,30 @@ func (c *ClientConnection) listenTicket() {
 	}
 }
 
-func (c *Client) processMatching(onDone func()) {
-	ticket, err := c.getTicket()
+func (c *Client) processMatching(class int64, onDone func()) {
+	ticket, err := c.getTicket(class)
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Printf("ticket id: %s\n", ticket.Id)
+	if ticket.FoundBackfill {
+		onDone()
+		return
+	}
 
 	conn, err := c.startListenTicket(ticket)
 	if err != nil {
 		panic(err)
 	}
 
-	conn.listenTicket()
+	conn.listenTicket(c.Bad)
 
 	onDone()
 }
+
+const (
+	classes = 6
+)
 
 func main() {
 	c, n := parseFlags()
@@ -112,7 +157,8 @@ func main() {
 	wg.Add(n)
 
 	for i := 0; i < n; i++ {
-		go c.processMatching(func() {
+		class := rand.Int63n(classes) + 1
+		go c.processMatching(class, func() {
 			wg.Done()
 		})
 	}

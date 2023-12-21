@@ -9,7 +9,7 @@
 	"RollingIntervalMil": 100,
 
 	"Classes": 6,
-	"MatchingStrategy": 1,
+	"MatchingStrategy": 2,
 	"MinMatchingCapacity": 4,
 	"MaxMatchingCapacity": 6,
 

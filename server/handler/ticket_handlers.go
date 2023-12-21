@@ -4,21 +4,27 @@ import (
 	"net/http"
 	"ssgb-matching/conns"
 	"ssgb-matching/errs"
+	"ssgb-matching/gsip"
 	"ssgb-matching/matching/tickets"
 	"ssgb-matching/server/context"
 	"ssgb-matching/server/errres"
 	"ssgb-matching/server/form"
 	"ssgb-matching/uuid"
+	"strconv"
 
 	"github.com/labstack/echo/v4"
 )
 
 type TicketNewForm struct {
-	Class int64 `form:"class" validate:"required"`
+	Class    int64  `form:"class" validate:"required"`
+	Backfill string `form:"backfill" validate:"required,boolean"`
 }
 
 type TicketNewResponse struct {
 	Id string
+
+	FoundBackfill bool
+	BackfillGsip  gsip.GSIP
 }
 
 func TicketNew(c echo.Context) error {
@@ -32,8 +38,31 @@ func TicketNew(c echo.Context) error {
 		return errres.BadRequest(err, c.Logger())
 	}
 
+	useBackfill, err := strconv.ParseBool(formData.Backfill)
+	if err != nil {
+		return errres.BadRequest(err, c.Logger())
+	}
+
+	engine := ctx.Engine()
+
+	if useBackfill {
+		backfill, err := engine.FindBackfill(formData.Class)
+		if !errs.IsErrorNotFound(err) {
+			if errs.IsErrorIndexOutOfRange(err) {
+				return errres.BadRequest(err, c.Logger())
+			} else if err != nil {
+				return errres.InternalError(err, c.Logger())
+			}
+
+			return c.JSON(http.StatusOK, TicketNewResponse{
+				FoundBackfill: true,
+				BackfillGsip:  backfill,
+			})
+		}
+	}
+
 	t, ch := tickets.MakeTicket(formData.Class)
-	err = ctx.Engine().AddToPool(t)
+	err = engine.AddToPool(t)
 	if errs.IsErrorIndexOutOfRange(err) {
 		return errres.BadRequest(err, c.Logger())
 	} else if err != nil {
@@ -41,7 +70,7 @@ func TicketNew(c echo.Context) error {
 	}
 
 	id := t.Id()
-	conn := conns.MakeConn(ctx.Engine().ConnParams(), ch, c.Logger())
+	conn := conns.NewConn(engine.ConnParams(), ch, c.Logger())
 	ctx.ConnMap().Set(id, conn)
 
 	return c.JSON(http.StatusOK, TicketNewResponse{
@@ -95,6 +124,7 @@ func TicketListen(c echo.Context) error {
 	connMap.Set(p.Id, conn)
 	conn.StartWaiting(p.Id, func() {
 		connMap.Remove(p.Id)
+		c.Logger().Debugf("conn map len: %d", connMap.Count())
 	})
 
 	return nil

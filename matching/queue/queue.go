@@ -32,14 +32,17 @@ func (q *Q) Enqueue(ticket tickets.Ticket) error {
 }
 
 func (q *Q) DequeueN(n int64) ([]tickets.Ticket, error) {
+	if n > q.inner.Len() {
+		return nil, errs.ErrorIndexOutOfRange()
+	}
+
 	interfaces, err := q.inner.Get(n)
 	if err != nil {
 		return nil, err
 	}
 
-	len := len(interfaces)
-	ts := make([]tickets.Ticket, 0, len)
-	for i := 0; i < len; i++ {
+	ts := make([]tickets.Ticket, 0, n)
+	for i := int64(0); i < n; i++ {
 		t, ok := interfaces[i].(tickets.Ticket)
 		if !ok {
 			return nil, errs.ErrorCastFail("ticket")

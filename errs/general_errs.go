@@ -39,3 +39,14 @@ func ErrorNoSuchItem() error {
 func ErrorItemAlreadyExists() error {
 	return errors.New("item already exists")
 }
+
+func ErrorNotFound() error {
+	return errors.New("not found")
+}
+
+func IsErrorNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	return err.Error() == "not found"
+}

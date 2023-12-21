@@ -20,7 +20,7 @@ func (m *ConnMap) Count() int64 {
 	return m.count
 }
 
-func (m *ConnMap) Set(id string, conn Conn) {
+func (m *ConnMap) Set(id string, conn *Conn) {
 	_, exists := m.inner.LoadOrStore(id, conn)
 	if !exists {
 		m.count++
@@ -39,15 +39,15 @@ func (m *ConnMap) Remove(id string) {
 	}
 }
 
-func (m *ConnMap) Get(id string) (Conn, error) {
+func (m *ConnMap) Get(id string) (*Conn, error) {
 	i, ok := m.inner.Load(id)
 	if !ok {
-		return Conn{}, errs.ErrorNoSuchItem()
+		return nil, errs.ErrorNoSuchItem()
 	}
 
-	c, ok := i.(Conn)
+	c, ok := i.(*Conn)
 	if !ok {
-		return Conn{}, errs.ErrorCastFail("conn")
+		return nil, errs.ErrorCastFail("conn")
 	}
 	return c, nil
 }

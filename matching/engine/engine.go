@@ -27,11 +27,13 @@ type Engine struct {
 	qMap       map[int64]*queue.Q
 	ticketPool *TicketPool
 	onRoll     matching.RollerFunc
+	provider   gsip.Provider
 	logger     logger.Logger
 	ticker     *time.Ticker
 }
 
-func NewEngine(params EngineParams, logger logger.Logger) (*Engine, error) {
+func NewEngine(params EngineParams, provider gsip.Provider, logger logger.Logger,
+) (*Engine, error) {
 	if params.Classes < 1 {
 		params.Classes = 1
 	}
@@ -46,11 +48,12 @@ func NewEngine(params EngineParams, logger logger.Logger) (*Engine, error) {
 		qMap:       make(map[int64]*queue.Q, params.Classes),
 		ticketPool: NewTicketPool(),
 		onRoll:     f,
+		provider:   provider,
 		logger:     logger,
 		ticker:     time.NewTicker(time.Millisecond * time.Duration(params.RollingIntervalMil)),
 	}
 
-	for i := int64(1); i <= params.Classes; i++ {
+	for i := int64(1); i <= int64(params.Classes); i++ {
 		e.qMap[i] = queue.NewQ(params.QParams)
 	}
 
@@ -82,12 +85,20 @@ func (e *Engine) PoolToQueue(id string) error {
 	}
 
 	idx := t.Class()
-	if err := e.qMap[idx].Enqueue(t); err != nil {
+	if err := e.qMap[int64(idx)].Enqueue(t); err != nil {
 		return err
 	}
 
 	e.logger.Debugf("enqueue a ticket to class[%d]", idx)
 	return nil
+}
+
+func (e *Engine) FindBackfill(class int64) (gsip.GSIP, error) {
+	if err := e.ValidClassIndex(class); err != nil {
+		return gsip.GSIP{}, err
+	}
+
+	return e.provider.BackFillGsip(class)
 }
 
 func (e *Engine) StartRolling() {
@@ -99,6 +110,9 @@ func (e *Engine) recover() {
 	if r := recover(); r != nil {
 		e.logger.Warn("recovering rolling")
 		go e.roll()
+	} else {
+		e.ticker.Stop()
+		e.logger.Debug("engine stopped rolling")
 	}
 }
 
@@ -106,29 +120,37 @@ func (e *Engine) roll() {
 	defer e.recover()
 
 	for range e.ticker.C {
-		results, err := e.onRoll(e.params.MatchingParams, e.qMap)
+		matchingResults, err := e.onRoll(e.params.MatchingParams, e.qMap)
 		if err != nil {
 			e.logger.Panic(err)
 		}
 
-		lenResult := len(results)
-		if lenResult == 0 {
+		lenResults := len(matchingResults)
+		if lenResults == 0 {
 			continue
 		}
 
-		e.logger.Debugf("%d matching done", lenResult)
+		e.logger.Debugf("%d matching done", lenResults)
 		for class, q := range e.qMap {
 			e.logger.Debugf("queue[%d] length: %d", class, q.Len())
 		}
 
-		for i := 0; i < lenResult; i++ {
-			r := results[i]
-			lenTickets := len(r.Matched)
+		for i := 0; i < lenResults; i++ {
+			matched := matchingResults[i]
+			lenTickets := len(matched.Matched)
+			result := gsip.GSIPResult{}
+
+			ip, err := e.provider.NextGsip(matched.Class)
+			if err != nil {
+				e.logger.Error(err)
+				result.Status = gsip.StatusError
+			} else {
+				result.Status = gsip.StatusOk
+				result.Gsip = ip
+			}
+
 			for j := 0; j < lenTickets; j++ {
-				r.Matched[j].Chan() <- gsip.GSIP{
-					Address: "dummy",
-					Port:    7777,
-				}
+				matched.Matched[j].Chan() <- result
 			}
 		}
 	}
