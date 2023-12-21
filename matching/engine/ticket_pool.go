@@ -57,6 +57,7 @@ LOOP:
 		case <-p.ticker.C:
 			tmp := make([]string, 0)
 			limit := time.Now().Add(-time.Second * time.Duration(p.params.WsUpgradeLimitSec))
+			p.logger.Debugf("cleaning up pool count: %d", p.count)
 			p.inner.Range(func(k, v interface{}) bool {
 				item, ok := v.(poolItem)
 				if !ok {
@@ -77,6 +78,7 @@ LOOP:
 			for i, count := 0, len(tmp); i < count; i++ {
 				id := tmp[i]
 				p.inner.Delete(id)
+				p.count--
 				p.logger.Warnf("removed from pool [%s]", id)
 			}
 		}
@@ -87,7 +89,7 @@ func (p *TicketPool) CloseCh() chan<- bool {
 	return p.closeCh
 }
 
-func (p *TicketPool) Len() int64 {
+func (p *TicketPool) Count() int64 {
 	return p.count
 }
 
