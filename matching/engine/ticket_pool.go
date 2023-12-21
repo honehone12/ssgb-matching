@@ -42,6 +42,9 @@ func (p *TicketPool) recover() {
 	if r := recover(); r != nil {
 		p.logger.Warn("recovering clean up")
 		go p.CleanUp()
+	} else {
+		p.ticker.Stop()
+		p.logger.Info("stopped cleaning up pool")
 	}
 }
 
@@ -52,12 +55,10 @@ LOOP:
 	for {
 		select {
 		case <-p.closeCh:
-			p.ticker.Stop()
 			break LOOP
 		case <-p.ticker.C:
 			tmp := make([]string, 0)
 			limit := time.Now().Add(-time.Second * time.Duration(p.params.WsUpgradeLimitSec))
-			p.logger.Debugf("cleaning up pool count: %d", p.count)
 			p.inner.Range(func(k, v interface{}) bool {
 				item, ok := v.(poolItem)
 				if !ok {
@@ -81,6 +82,8 @@ LOOP:
 				p.count--
 				p.logger.Warnf("removed from pool [%s]", id)
 			}
+
+			p.logger.Debugf("pool count after cleaning up: %d", p.count)
 		}
 	}
 }

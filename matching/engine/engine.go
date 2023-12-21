@@ -113,8 +113,9 @@ func (e *Engine) recover() {
 		e.logger.Warn("recovering rolling")
 		go e.roll()
 	} else {
+		e.ticketPool.CloseCh() <- true
 		e.ticker.Stop()
-		e.logger.Debug("engine stopped rolling")
+		e.logger.Info("engine stopped rolling")
 	}
 }
 
